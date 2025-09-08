@@ -198,7 +198,7 @@ access networks
 - packets queue in router buffers, waiting for turn in transmission
   - queue length grows when arrival rate to link (temporarily) exceeds output link capacity
 - loss occurs when memory to hold queued packets fills up
-- nodal delay = nodal processing delay + queuing delay + transmission delay + propagation delay
+- end-end delay = processing delay + queuing delay + transmission delay + propagation delay
 - $La/R$ ~ 0: avg queuing delay small; $La/R$ <= 1: queuing delay large; $La/R$ > 1: more work arriving than can be serviced - infinite delay
 
 ### "real" internet delays & routes
