@@ -173,3 +173,104 @@
   - tcp connection opened to server
   - multiple objects can be sent over single tcp connection
   - connection closed
+
+### http request message
+
+- ascii (human-readable format)
+- request line (get, post, head commands)
+- format
+  method url version\r\n
+  header field value\r\n
+  ...
+  \r
+  body
+
+### http request messages
+
+- post method
+  - web page often includes form input
+  - user input sent from client to server in message body
+- head method
+  - requests headers (only) that would be returned if specified url were requested with get method
+- get method (sending data to server)
+  - include user data in url field of get request message (following '?', separated by '&')
+- put method
+  - uploads new file (object) to server
+  - completely replaces file that exists at specified url with content in entity body of post request message
+
+### response message
+
+- status line (protocol code phrase)
+- codes
+  - 200 ok
+  - 301 moved permanently
+  - 400 bad request
+  - 403 forbidden
+  - 404 not found
+  - 505 http version not supported
+
+### maintaining user/server state: cookies
+
+- http is stateless, so how do we "maintain state"?
+- no notion of multi-step exchanges of http messages to complete a web transaction
+  - no need for client/server to track state of multi-step exchange
+  - all http requests are independent of each other
+  - no need for client/server to recover from partially complete transaction
+- cookies maintain some state between transactions with 4 components
+  - cookie header line of http response message
+  - cookie header line in next http request message
+  - cookie file kept on user's host, managed by browser
+  - backend database at web site
+- use of cookies
+  - authorization
+  - shopping carts
+  - recommendations
+  - user session state (web email)
+- how to keep state?
+  - at endpoints over several transactions
+  - in messages: cookies in http messages carry state
+- track user's browsing behavior
+  - first party cookies track on a site
+  - third party cookies track across multiple websites without user ever choosing to visit tracker site (!)
+  - tracking may be (is) invisible to user
+  - third party tracking via cookies disabled by default in safari & firefox, disabled in chrome in 2023
+
+### gdpr (eu general data protection regislation)
+
+- if cookies can identify individual -> considered personal data -> subject to gdpr personal data regulations
+
+### web caches (aka proxy servers)
+
+- goal: satisfy client requests without involving origin server
+- user configures browser to point to local web cache
+- browser sends all http requests to cache
+  - if object in cache, cache returns object to client
+  - else cache requests object from origin server, caches received object, returns object to client
+- acts as both client & server: server for original requesting client, client to origin server
+- server tells cache about object's allowable caching in response header
+- why?
+  - reduce response time for client request bc cache is closer to client
+  - reduce traffic on institution's access link
+  - internet saturated with caches
+    - enables poor content providers to more effectively deliver content
+
+### browser caching: conditional get
+
+- goal: don't send object if browser has up-to-date cached version
+  - no object transmission delay (or use of network resources)
+- client: specify date of browser-cached copy in http request (if-modified-since)
+- server: response contains no object if browser-cached copy is up-to-date: http/1.0 304 not modified
+
+### http/2
+
+- key goal: decreased delay in multi-object http requests
+- http1.1
+  - introduced multiple pipelined gets over single tcp connection
+  - server responds fcfs to get requests
+  - with fcfs, small objects may have to wait for transmission (head-of-line (hol) blocking) behind large objects
+  - loss recovery (retransmitting lost tcp segments) stalls object transmission
+- http2 (rfc 7540, 2015) increases flexibility at server in sending objects to client
+  - methods, status codes, most header fields unchanged from http1.1
+  - transmission order of requested objects based on client-specified object priority (not necessarily fcfs)
+  - push unrequested objects to client
+  - divide objects into frames, schedule frames to mitigate hol blocking
