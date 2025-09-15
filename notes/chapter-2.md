@@ -261,16 +261,286 @@
 - client: specify date of browser-cached copy in http request (if-modified-since)
 - server: response contains no object if browser-cached copy is up-to-date: http/1.0 304 not modified
 
-### http/2
+### http versions
 
-- key goal: decreased delay in multi-object http requests
 - http1.1
   - introduced multiple pipelined gets over single tcp connection
   - server responds fcfs to get requests
   - with fcfs, small objects may have to wait for transmission (head-of-line (hol) blocking) behind large objects
   - loss recovery (retransmitting lost tcp segments) stalls object transmission
 - http2 (rfc 7540, 2015) increases flexibility at server in sending objects to client
+  - key goal: decreased delay in multi-object http requests
   - methods, status codes, most header fields unchanged from http1.1
   - transmission order of requested objects based on client-specified object priority (not necessarily fcfs)
   - push unrequested objects to client
   - divide objects into frames, schedule frames to mitigate hol blocking
+- http3
+  - http2 over single tcp connection means:
+    - recovery from packet loss still stalls all object transmissions
+      - like in http1.1, browsers have incentive to open multiple parallel tcp connections to reduce stalling & increase overall throughput
+    - no security over vanilla tcp connection
+  - add security, per-object error & congestion control (more pipelining) over udp
+
+### quic: quick udp internet connections
+
+- app-layer protocol on top of udp
+  - increase performance of http
+  - deployed on many google servers & apps (chrome, youtube mobile)
+- adopts approaches for connection establishment, error control, congestion control
+  - error & congestion control: "readers familiar with tcp's loss detection & congestion control will find algorithms here that parallel well-known tcp ones"
+  - connection establishment: reliability, congestion control, authentication, encryption, state established in one rtt
+- rather than both a tcp and tls handshake, quic does a 1 rtt handshake that establishes connection & handles security, then sends data
+- client can use last session ticket for encryption & authentication for new connection -> 0 rtt delay
+
+## email, smtp, imap
+
+### email - 3 major components
+
+- user agent
+  - composes, edits,reads mail
+- mail server
+  - outgoing & incoming messages stored on mail server
+  - mailbox contains incoming messages for user
+  - message queue of outgoing mail messages to be sent
+- simple mail transfer protocol: smtp
+  - client: sending mail server, "server": receiving mail server
+
+### smtp (rfc 5321)
+
+- uses tcp to reliably transfer email message from client (mail server initiating connection) to server, port 25
+  - direct transfer: sending server (acting like client) to receiving server
+- 3 phases of transfer
+  - handshaking
+  - message transfer
+  - closure
+- command/response interaction like http
+  - commands: ascii text
+  - response: status code & phrase
+
+### scenario: a sends email to b
+
+1. a uses user agent to compose email message to b@someschool.edu
+2. a's ua sends message to her mail server using smtp, message placed in queue
+3. client side of smtp at mail server opens tcp connection with bob's mail server
+4. smtp client sends alice's message over tcp connection
+5. bob's mail server places message in bob's mailbox
+6. bob invokes ua to read message
+
+### smtp: observations
+
+- compared to http
+  - http: client pull
+  - smtp: client push
+  - both have ascii command/response interaction & status codes
+  - http: each object encapsulated in its own response message
+  - smtp: multiple objects sent in multi-part message
+  - smtp uses persistent connections
+  - smtp requires message to be in 7-bit ascii
+  - smtp server uses \r\n.\r\n to determine end of message
+
+### mail message format
+
+- rfc 5321 defines protocol for _exchanging_ email messages
+- rfc 2822 defines _syntax_ for email itself, like html defines syntax for web documents
+  - header lines, e.g. to, from, subject
+  - body: message, ascii only
+
+### retrieving email: mail access protocols
+
+- smtp: delivery/storage of email messages to receiver's server
+- mail access protocol: retrieval from server
+  - imap: internet mail access protocol (rfc 3501): messages stored on server, imap provides retrieval, deletion, folders of stored messages on server
+- http can provide web-based interface on top of smtp & pop/imap to retrieve email
+
+## dns
+
+### dns: domain name system
+
+- distributed database implemented in hierarchy of many name servers
+- app-layer protocol: hosts & dns servers communicate to translate names to addrs
+- core internet function
+- complexity at network's "edge"
+
+### dns services & structure
+
+- services
+  - hostname-to-ip translation
+  - host aliasing
+    - canonical, alias names
+  - mail server aliasing
+  - load distribution
+    - replicated web servers: many ip addrs correspond to one name
+
+### thinking about dns
+
+- enormous distributed database: ~ billions records, each simple
+- handles many trillions of queries per day
+  - many more reads than writes
+  - performance matters: almost every internet transaction interacts with dns - ms count!
+- organizationally & physically decentralized
+  - millions of different orgs responsible for their records
+- reliability, security
+
+### dns: distributed, hierarchical database
+
+- client wants address for amazon.com, 1st approximation
+  - queries root server to find .com dns server
+  - queries .com dns server to get amazon.com dns server
+  - queries amazon.com dns server to get amazon.com ip
+
+### root name servers
+
+- official, contact-of-last-resort by name servers that can't resolve name
+- incredibly important internet function
+  - internet couldn't function without it
+  - dnssec - provides security (authentication, message integrity)
+- icann (internet corporation for assigned names & numbers) manages root dns domain
+
+### top-level domain (tld) & authoritative servers
+
+- tld servers
+  - responsible for .com, .org, .net, .edu, .aero, .jobs, .museums, all top-level country domains, e.g. .cn, .uk, .fr, .ca, .jp
+  - network solutions: authoritative registry for .com, .net tld
+  - educause: .edu tld
+- authoritative servers
+  - org's own dns server(s), providing authoritative hostname-to-ip mappings for org's named hosts
+  - can be maintained by org or service provider
+
+### local dns servers
+
+- when host makes dns query, sent to local dns server
+  - local dns server returns reply, answering:
+    - from its local cache of recent name-addr translation pairs (possibly out of date!)
+    - forwarding request into dns hierarchy for resolution
+  - each isp has local dns, how to find it
+    - macos: `scutil --dns`
+    - windows: `ipconfig \all`
+- local dns server doesn't strictly belong to hierarchy
+
+### query types
+
+- iterated query
+  - contacted server replies with name of server to contact
+  - "i don't know this name, but ask this server"
+- recursive query
+  - put burden of name resolution on contacted name server
+  - heavy load at upper levels of hierarchy?
+
+### catching dns info
+
+- once any name server learns mapping, it caches mapping, immediately returns cached mapping in response to query
+  - caching improves response time
+  - cache entries timeout after some time (ttl)
+  - tld servers typically cached in local name servers
+- cached entries may be out of date
+  - if named host changes ip addr, may not be known internet-wide until all ttls expire
+  - best-effort name-addr translation
+
+### dns records
+
+- resource records (rr) format: (`name, value, type, ttl`)
+- type=A
+  - `name` is hostname, `value` is ip
+- type=NS
+  - `name` is domain (e.g. foo.com)
+  - `value` is hostname of authoritative name server for this domain
+- type=CNAME
+  - `name` is alias name for some canonical (real) name
+- type=MX
+  - `value` is name of smtp mail sever associated with `name`
+
+### dns protocol messages
+
+- ds query and reply messages have same format
+  - header
+    - identification: 16-bit number for query, reply to query uses same number
+    - flags
+      - query/reply
+      - recursion desired
+      - recursion available
+      - reply is authoritative
+  - body
+    - name, type fields for query
+    - rrs in response to query
+    - records for authoritative servers
+    - additional "helpful" info that may be used
+
+### getting info into dns
+
+- register website name at dns registrar
+  - provide names, ip addrs of authoritative name server (primary & secondary)
+  - registrar inserts ns, a rrs into .com tld server (example.com, dns1.example.com, NS) (dns1.example.com, x.x.x.1, A)
+- create authoritative server locally with ip addr x.x.x.1
+  - type a record for www.example.com
+  - type mx record for example.com
+
+### dns security
+
+- ddos attacks
+  - bombard root servers with traffic
+    - not successful to date
+    - traffic filtering
+    - local dns servers cache ips of tld servers, allowing root server bypass
+  - bombard tld servers
+    - potentially more dangerous
+- spoofing attacks
+  - intercept dns queries, return bogus replies
+    - dns cache poisoning
+    - rfc 4033: dnssec authentication services
+
+## video streaming & cdn
+
+### context
+
+- stream video traffic: major consumer of internet bandwidth
+  - netflix, youtube, amazon prime: 80% of residential isp traffic (2020)
+- challenge: scale - how to reach ~1b users?
+- challenge: heterogeneity
+  - different users have different capabilities (e.g. wired vs. mobile, high vs low bandwidth)
+- solution: distributed, app-level infrastructure
+
+### multimedia: video
+
+- video: sequence of images displayed at constant rate
+- digital image: array of pixels
+  - each pixel represented by bits
+- coding: use redundancy within & between images to decrease number of bits used to encode image
+  - spatial (within image)
+  - temporal (from one image to next)
+- cbr (constant bitrate): fixed encoding rate
+- vbr (variable bitrate): encoding rate changes as amount of spatial & temporal encoding changes
+- examples
+  - mpeg 1 (cd-rom): 1.5 Mbps
+  - mpeg 2 (dvd): 3-6 Mbps
+  - mpeg 4 (often used on internet): 64 Kbps - 12 Mbps
+
+### streaming stored video
+
+- challenges
+  - server-client bandwidth will vary over time, with changing network congestion levels (in house, access network, network core, video server)
+  - packet loss, delay due to congestion will delay playout, or result in poor video quality
+  - continuous playout constraint: during client video playout, playout timing must match original timing
+    - but network delays are visible (jitter), so will need client-side buffer to match continuous playout constraint
+  - client interactivity: pause, fast-forward, rewind, jump through video
+  - video packets may be lost, retransmitted
+- playout buffering
+  - client-side buffering & playout delay: compensate for network-added delay, delay jitter
+
+### streaming multimedia: dash (dynamic, adaptive streaming over http)
+
+- server
+  - divides video file into multiple chunks
+  - each chunk encoded at multiple different rates
+  - different rate encodings stored in different files
+  - files replicated in various cdn nodes
+  - manifest file: provides urls for different chunks
+- client
+  - periodically estimates server-client bandwidth
+  - consulting manifest, requests 1 chunk at a time
+    - chooses maximum coding rate sustainable for current bandwidth
+    - can choose different coding rates at different points in time (depending on available bandwidth), & from different servers
+- "intelligence" at client: client determines
+  - when to request chunk (so that buffer starvation/overflow doesn't occur)
+  - what rate to request (higher quality when more bandwidth available)
+  - where to request chunk (can reqeust from url server closer to client or that has higher available bandwidth)
+  - streaming video = encoding + dash + playout buffering
