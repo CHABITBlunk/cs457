@@ -544,3 +544,80 @@
   - what rate to request (higher quality when more bandwidth available)
   - where to request chunk (can reqeust from url server closer to client or that has higher available bandwidth)
   - streaming video = encoding + dash + playout buffering
+
+### content distribution networks (cdns)
+- how do we stream content (selected from millions of videos) to hundreds of thousands of simultaneous users?
+  - option 1: single large "mega-server"
+    - single point of failure
+    - point of network congestion
+    - long (possibly congested) path to distant clients
+    - doesn't scale
+  - option 2: store/serve multiple copies of videos at multiple geographically distributed sites (cdn)
+    - enter deep: push cdn servers deep into many access networks
+      - close to users
+      - akamai: 240k servers deployed in 120+ countries (2015)
+        - today: 360k servers in 135 countries
+    - bring home: smaller number (dozens) of larger clusters in pops near access nets
+      - used by limelight
+
+### how does netflix work?
+- stores copies of content at its worldwide openconnect cdn nodes
+- subscriber requests content, service provider returns manifest
+  - using manifest, client retrieves content at highest supportable rate
+  - may choose different rate or copy if network path congested
+
+### cdn designs
+- over-the-top (ott) - internet p2p communication as service
+  - challenges: coping with congested internet from edge
+    - what content to place in which cdn node?
+    - from which cdn node do we retrieve content at which rate?
+
+## socket programming: udp & tcp
+
+### socket programming
+- goal: learn how to build client/server apps that communicate with sockets
+- socket: door between app proc & end-end transport protocol
+- 2 main socket types: udp, tcp
+
+### udp socket programming
+- no "connection" between client & server
+- no handshaking before sending data
+- sender explicitly attaches ip destination addr & port number to each packet
+- receiver extracts sender ip & port number from packet
+- udp: data may be lost or received out of order
+- app viewpoint
+  - udp provides unreliable transfer of groups of bytes (datagrams) between client & server
+- interaction steps
+  1. server & client create socket
+  2. client creates datagram w server ip, sends to server
+  3. server reads datagram from server socket
+  4. server writes reply to server socket specifying client ip & port number
+  5. client reads datagram from client socket & closes client socket
+
+### tcp socket programming
+- client must contact server
+- server proc must be running
+- server must have created socket that welcomes client's contact
+- client contacts server by
+  - creating tcp socket & specifying ip & port number of server
+  - when client creates socket, client tcp establishes connection to server tcp
+- when contacted by client, server tcp creates new socket for server proc to communicate with that client
+  - allows server to talk with multiple clients
+  - client source port number & ip used to distinguish clients
+- app viewpoint
+  - tcp provides reliable, in-order byte stream transfer (pipe) between client & server
+- interaction steps
+  1. server creates socket & waits for incoming connection requests
+  2. client creates socket, connects to server at port x
+  3. client sends request using socket
+  4. server reads request from connection socket & writes & sends reply
+  5. client reads reply from client socket & closes client socket
+
+
+### waiting for multiple events
+- sometimes programs must wait for one of several events to happen, e.g.
+  - wait for either
+    1. reply from another end of socket
+    2. timeout: timer
+  - wait for replies from several different open sockets: multithreading
+- timeouts used extensively in networking
