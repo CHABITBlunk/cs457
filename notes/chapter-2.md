@@ -546,6 +546,7 @@
   - streaming video = encoding + dash + playout buffering
 
 ### content distribution networks (cdns)
+
 - how do we stream content (selected from millions of videos) to hundreds of thousands of simultaneous users?
   - option 1: single large "mega-server"
     - single point of failure
@@ -561,12 +562,14 @@
       - used by limelight
 
 ### how does netflix work?
+
 - stores copies of content at its worldwide openconnect cdn nodes
 - subscriber requests content, service provider returns manifest
   - using manifest, client retrieves content at highest supportable rate
   - may choose different rate or copy if network path congested
 
 ### cdn designs
+
 - over-the-top (ott) - internet p2p communication as service
   - challenges: coping with congested internet from edge
     - what content to place in which cdn node?
@@ -575,11 +578,13 @@
 ## socket programming: udp & tcp
 
 ### socket programming
+
 - goal: learn how to build client/server apps that communicate with sockets
 - socket: door between app proc & end-end transport protocol
 - 2 main socket types: udp, tcp
 
 ### udp socket programming
+
 - no "connection" between client & server
 - no handshaking before sending data
 - sender explicitly attaches ip destination addr & port number to each packet
@@ -595,6 +600,7 @@
   5. client reads datagram from client socket & closes client socket
 
 ### tcp socket programming
+
 - client must contact server
 - server proc must be running
 - server must have created socket that welcomes client's contact
@@ -613,8 +619,8 @@
   4. server reads request from connection socket & writes & sends reply
   5. client reads reply from client socket & closes client socket
 
-
 ### waiting for multiple events
+
 - sometimes programs must wait for one of several events to happen, e.g.
   - wait for either
     1. reply from another end of socket
