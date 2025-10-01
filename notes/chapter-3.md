@@ -258,26 +258,26 @@
   - buffers pkts as needed for in-order delivery to upper layer
 - sender
   - maintains (conceptually) a timer for each unacked pkt
-    - timeout: retransmits single unacked packet associated with timeout
+    - timeout: retransmits single unacked pkt associated with timeout
   - maintains (conceptually) window over n consecutive seq nums
-    - limits pipelined, "in flight" packets to be within this window
+    - limits pipelined, "in flight" pkts to be within this window
 
 ### selective repeat
 
 - sender logic
   - data from above
-    - if next available seq num in window, send packet
+    - if next available seq num in window, send pkt
   - timeout (n)
-    - resend packet n, restart timer
+    - resend pkt n, restart timer
   - ack(n) in [sendbase, sendbase - n - 1]
-    - mark packet n as received
-    - if n smallest unacked packet, advance window base to next unacked seq num
+    - mark pkt n as received
+    - if n smallest unacked pkt, advance window base to next unacked seq num
 - receiver logic
-  - packet n in [sendbase, sendbase - n - 1]
+  - pkt n in [sendbase, sendbase - n - 1]
     - send ack(n)
     - out of order: buffer
-    - in order: deliver (also deliver buffered, in order packets), advance window to next packet not yet received
-  - packet n in [rcvbase, rcvbase - n - 1]
+    - in order: deliver (also deliver buffered, in order pkts), advance window to next pkt not yet received
+  - pkt n in [rcvbase, rcvbase - n - 1]
     - ack(n)
   - otherwise, ignore
 
@@ -357,3 +357,127 @@
   - if ack acknowledges previously unacked segments
     - update what is known to be acked
     - start timer if still have unacked segments
+
+### receiver events
+
+- arrival of in-order segment with expected seq num. all data up to expected seq num already acked
+  - delayed ack. wait up to 500 ms for next segment. if no next segment, send ack
+- arrival of in-order segment with expected seq num. one other segment has ack pending
+  - immediately send single cumulative ack, acking both in-order segments
+- arrival of segment out of order higher than expected seq num. gap detected
+  - send duplicate ack (acking last correctly received in order byte), indicating seq num of next expected byte
+- arrival of segment that partially or completely fills gap
+  - immediately send ack, provided segment starts at lower end of gap
+
+### retransmission scenarios
+
+- lost ack
+  - sender just resends last seq num
+- premature timeout - sender sends multiple pkts, receiver sends acks, but sender resends since ack arrived later than window
+  - receiver sends cumulative ack
+- sender sends several segments, but one ack lost, so receiver resends cumulative ack to cover for it
+
+### fast retransmit
+
+- if sender receives 3 additional acks for same data (triple duplicate acks), resend unacked segment with smallest seg num
+  - likely that unacked segment lost, don't wait for timeout
+
+### flow control
+
+- network layer delivers data faster than app layer removes data from socket buffers -> overflow
+- necessary to add flow control info to pkt
+- receiver advertises free buffer space in rwnd field in tcp header
+  - rcvbuffer size set via socket options (typically 4096 bytes)
+  - many operating systems auto adjust rcvbuffer
+- sender limits amount of in-flight data to received rwnd
+- guarantees receive buffer will not overflow
+
+### conn mgmt
+
+- before exchanging data, sender/receiver handshake
+  - agree to establish conn (each knowing other willing to establish conn)
+  - agree on conn params (e.g. starting seq nums)
+
+### agreeing to establish conn
+
+- 2-way handshake
+  - client: `req_conn(x)`
+  - server: estab, `acc_conn(x)`
+  - client: estab
+- will this always work in network?
+  - variable delays
+  - retransmitted messages (e.g. `req_conn(x)`) due to message loss
+  - message reordering
+  - can't see other side
+
+### 2-way handshake scenarios
+
+- normal
+  - client `req_conn(x)` hits server timely
+  - server `acc_conn(x)` hits client timely
+  - client `data(x + 1)` hits server timely
+  - server `ack(x + 1)` hits client timely
+  - conn complete, server & client forget each other
+- weird
+  - client `req_conn(x)` hits server timely
+  - server `acc_conn(x)` hits client not timely
+  - client retransmit `req_conn(x)`
+  - server `acc_conn(x)` hits client
+  - conn closes, server & client forget each other
+  - client retransmitted `req_conn(x)` hits -> half open conn
+  - client `data(x + 1)` accepted -> duplicate data accepted
+
+### 3-way handshake
+
+| client state                        | server state       |
+| ----------------------------------- | ------------------ |
+| choose init seq num x, send tcp syn | wait               |
+| wait                                | receive ack(y)     |
+| receives syn-ack, estab, send ack   | wait               |
+| wait                                | receive ack, estab |
+
+### closing tcp conn
+
+- client & server close their side of conn
+  - send tcp segment with fin bit = 1
+- respond to received fin with ack
+  - on receiving fin, ack can be combined with own fin
+- can hold simultaneous fin exchanges
+
+## principles of congestion control
+
+### principles of congestion control
+
+- congestion: too many sources sending too much data too fast for network to handle
+- manifestations
+  - long delays (queuing in router buffers)
+  - pkt loss (buffer overflow)
+- different from flow control
+- top-10 problem
+
+### causes/costs of congestion
+
+- scenario 1
+  - one router, infinite buffers
+  - input & output link cap: R
+  - 2 flows
+  - no need for retransmission
+  - as arrival rate approaches R/2, arrival rate gets capped at R/2, but delay exponentially increases
+- scenario 2
+  - one router, finite buffers
+  - sender retransmits lost, timed-out pkt
+    - app layer in = app layer out
+    - transport layer input includes transmissions -> in >= out
+  - idealization: perfect knowledge
+    - sender sends only when router buffers available
+  - idealization: some perfect knowledge
+    - pkts can be dropped at router due to full buffers
+    - sender knows when pkt has been dropped; only resends if pkt known to be lost
+    - can manifest in either some or no buffer space
+  - realistic: unnecessary duplicates
+    - pkts can be dropped at router due to full buffers -> retransmit dropped pkts
+    - sender times can time out prematurely, sending 2 copies, both of which are delivered
+    - costs of congestion
+      - more work for given receiver throughput
+      - unnecessary retransmissions: link carries multiple copies of pkt
+        - decreasing max achievable throughput
