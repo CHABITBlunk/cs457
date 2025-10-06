@@ -39,7 +39,7 @@
   - host receives ip datagrams
     - each datagram has source & destination ip
 
-### connectionless demultiplexing
+### connless demultiplexing
 
 - when creating socket, must specify host-local port num
 - when creating datagram to send to udp socket, must specify destination ip & destination port
@@ -47,7 +47,7 @@
 - ip/udp datagrams with same destination port but different source ips and/or source ports will be directed to same socket at receiving host
 - uses only destination port
 
-### connection-oriented demultiplexing
+### conn-oriented demultiplexing
 
 - tcp socket identified by 4-tuple
   - source ip
@@ -62,11 +62,11 @@
 
 - no frills, bare bones internet transport protocol
 - best effort service, udp segments may be lost or delivered out of order
-- connectionless
+- connless
   - no handshake between udp sender & receiver
   - each udp segment handled independently of others
 - why it exists
-  - no connection establishment (avoid rtt delay)
+  - no conn establishment (avoid rtt delay)
   - simple: no conn state at sender or receiver
   - small header size
   - no congestion control
@@ -293,12 +293,12 @@
 - reliable, in-order byte stream
   - no message boundaries
 - full duplex data
-  - bidirectional data flow in same connection
+  - bidirectional data flow in same conn
   - mss: maximum segment size
 - cumulative acks
 - pipelining
   - tcp congestion & flow control set window size
-- connection-oriented
+- conn-oriented
   - handshaking initializes sender & receiver before data exchange
 - flow controlled
 - sender will not overwhelm receiver
@@ -337,10 +337,11 @@
   - samplertt will vary, want smoother estimated rtt
   - average several recent measurements, not just current samplertt
 - timeout interval: estimatedrtt + safety margin
+  - (alpha typically 0.125) $ estimatedrtt = (1 - alpha) \times estimatedrtt + alpha \times samplertt $
   - large variation in estimatedrtt -> need larger safety margin
-  - timeout interval = estimatedrtt + 4 \* devrtt
+  - $ timeout interval = estimatedrtt + 4 \times devrtt $
 - devrtt: ewma of samplertt deviation from estimatedrtt
-  - devrtt = (1 - $beta$) _ devrtt + $beta$ _ |samplertt - estimatedrtt| ($beta$ usually 0.25)
+  - devrtt = $ (1 - beta) \times devrtt + beta \times |samplertt - estimatedrtt| $ (beta usually 0.25)
 
 ### sender events
 
@@ -481,3 +482,130 @@
       - more work for given receiver throughput
       - unnecessary retransmissions: link carries multiple copies of pkt
         - decreasing max achievable throughput
+- scenario 3
+  - 4 senders, multi hop paths, timeout/retransmit
+    - what happens as app layer in & rate of app layer in increase?
+    - as rate of app layer in increases, all arriving pkts at upper queue are dropped, throughput -> 0
+- insights
+  - throughput can never exceed capacity
+  - delay increases as capacity approached
+  - loss/retransmission decreases effective throughput
+  - unnecessary duplicates further decrease effective throughput
+  - upstream transmission capacity/buffering wasted for pkts lost downstream
+
+### approaches toward congestion control
+
+- e2e congestion control
+  - no explicit feedback from network
+  - congestion inferred from observed loss & delay
+  - approach taken by tcp
+- network assisted congestion control
+  - routers provide direct feedback to sending/receiving hosts with flows passing through congested router
+  - may indicate congestion level or explicitly set sending rate
+  - tcp, ecn, atm, decbit protocols
+
+## congestion control
+
+### aimd
+
+- approach: senders can increase sending rate until congestion occurs, then decrease sending rate on loss event
+- additive increase
+  - increase sending rate by 1 max seg size every rtt until loss detected
+- multiplicative decrease
+  - cut sending rate in half at each loss event
+  - cut in half on loss detected by triple duplicate ack (tcp reno)
+  - cut to 1 mss when loss detected by timeout (tcp tahoe)
+- distributed, async algorithm shown to optimize congested flow rates network wide & have desirable stability
+
+### congestion control details
+
+- tcp sending behavior
+  - roughly: send cwnd bytes, wait rtt for acks, then send more bytes (rate = cwnd/rtt bytes/second)
+- sender limits transmission: last byte sent - last byte acked <= cwnd
+- cwnd dynamically adjusted in response to observed network congestion (implementing congestion control)
+
+### slow start
+
+- when conn begins, increase rate exponentially until first loss event
+  - initially cwnd = 1 mss
+  - double cwnd every every rtt
+  - done by incrementing cwnd for every ack received
+- initial rate slow but increases exponentially
+
+### slow start -> congestion avoidance
+
+- when should exponential increase switch to linear?
+  - when cwnd gets to 1/2 value before timeout
+- implementation
+  - variable ssthresh
+  - on loss event, ssthresh set to cwnd/2 just before loss event
+
+### tcp cubic
+
+- is there a better way than aimd to probe for usable bandwidth?
+- insight/intuition
+  - wmax: sending rate at which congestion loss was detected
+  - congestion state of bottleneck link probably (?) hasn't changed much
+  - after cutting rate/window in half on loss, iniitally increase to wmax faster, but then approach more slowly
+- k: point in time when tcp widow size will reach wmax
+  - k itself is tunable
+- increase w as a function of the cube of the distance between current time & k
+  - larger increases when further away from k
+  - smaller increases when nearer to k
+- tcp cubic default in linux, is most popular tcp for web servers until ~2024
+
+### bottleneck link
+
+- tcp (classic, cubic) increase sending rate until pkt loss occurs at some router's output: bottleneck link
+- understanding congestion: useful to focus on congested bottleneck link
+- multiple flows collectively congest bottleneck link
+  - each executes their own congestion control
+  - each of n flow should ideally receive throuhgput of r/n
+
+### keeping pipe just full enough
+
+- keep bottleneck link busy transmitting, but avoid high delays/buffering
+- intuition
+  - ideal amount of inflight data for a conn (ninflight) = conn's share of bottleneck bandwidth \* minrtt
+- increasing ninflight while it is below bottleneck bandwidth will not increase rtt, since arrival rate to queue < transmission rate
+- when we hit bandwidth-delay product, arrival rate of pkt data to bottleneck link = link bandwidth
+- any higher than bandwidth-delay product will increase rtt
+- throughput will increase until we hit bandwidth-delay product, then plateau
+- loss-based tcp operates after we hit bandwidth-delay product, bbr tcp operates when we hit product
+
+### bbr (bottleneck bandwidth & rtt)
+
+- regulates ninflight
+- at longer time intervals, reduces ninfligt to lower bandwidth, measure new minrtt
+- at shorter time intervals
+  - acceleration: increases ninflight until reaches throughput plateau
+  - cruising: sends at rate that network delivers data as evidenced through received acks
+  - deceleration: reduces ninflight, decreasing queue pressure, looking for lower minrtt
+
+### explicit congestion notification (ecn)
+
+- tcp deployments often implement network assisted congestion control
+  - 2 bits in ip header (tos field) marked by router to indicate congestion
+    - policy to determine marking chosen by network operator
+  - congestion indication carried to destination
+  - destination sets ece bit on ack segment to notify sender of congestion
+  - involves both ip (ip header ecn bit marking) & tcp (tcp header c, e bit marking)
+
+### tcp fairness
+
+- if k tcp sessions share same bottleneck link of bandwidth r, each should have avg rate of r/k
+- ideally, tcp is fair, assuming same rtt & fixed num sessions only in congestion avoidance
+
+### must all network apps be fair?
+
+- udp
+  - multimedia apps often don't use tcp
+    - don't want rate throttled by congestion control
+  - instead use udp
+    - send audio/video at constant rate, tolerate loss
+  - no policing use of congestion control
+- tcp
+  - app can open multiple parallel conns between 2 hosts
+  - web browsers do this, e.g. link of rate r with 9 existing conns
+    - new app asks for 1 tcp, gets rate r/10
+    - new app asks for 11 tcps, gets r/2
