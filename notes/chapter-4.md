@@ -236,3 +236,164 @@
   - if network num of dest = network num of interface, deliver pkt to dest over that interface
   - else if dest network num in forwarding table, deliver to nexthop router
   - else deliver pkt to default router
+
+### destination based forwarding
+
+- foundations of subnetting
+- ranges of ip addrs that output to different interfaces, then a default or "otherwise" case
+- what if i want to reserve a range inside of a range?
+  - any addr inside both ranges could satisfy both, so which interface do we choose on which to send it?
+
+### longest prefix matching
+
+- when looking for forwarding table entry for given dest addr, use longest addr prefix that matches dest addr
+- previous example: when we have more bits that are the same, follow that and send it across a more specific interface
+- often performed using ternary content addressable memories (tcams)
+  - content addressable: present addr to tcam: retrieve addr in one clock cycle, regardless of table size
+  - cisco catalyst: ~1m routing table entries in tcam
+
+## ip
+
+### network layer: internet
+
+- ip protocol
+  - datagram format
+  - addressing
+  - pkt handling conventions
+- icmp protocol
+  - error reporting
+  - router "signaling"
+- path selection algorithms
+  - implemented in
+    - routing protocols (ospf, bgp)
+    - sdn controller
+
+### datagram format
+
+- tcp pkt format built off of this, so architecture is virtually the same
+- overhead - 40 bytes
+  - 20 bytes of tcp
+  - 20 bytes of ip
+
+### fragmentation & reassembly
+
+- each network has some mtu (max transmission unit)
+  - ethernet (1500 bytes), fddi (4500 bytes)
+- strat
+  - fragmentation occurs in a router when it gets a datagram that it wants to forward over a network with lower mtu size than datagram size
+  - reassembly done at receiving host
+  - all fragments carry same identifier in ident field
+  - fragments are self-contained datagrams
+  - ip doesn't recover from missing fragments
+- header fields used in ip fragmentation
+  - unfragmented pkt
+  - fragmented pkts
+
+### ip addressing - intro
+
+- ip addr: 32 bit identifier associated with each host or router interface
+- interface: conn between host/router & physical link
+  - routers typically have multiple interfaces
+  - host typically has 1-2 interfaces
+
+### ipv4 addr
+
+- 32 bit number (4 B addrs)
+- identifies an interface
+- represented in dotted quad notation
+
+### hierarchical addressing
+
+- grouping related hosts
+  - internet is an internetwork
+    - used to connect networks together, not hosts
+    - needs a way to address a network
+- scalability challenge
+  - suppose hosts had arbitrary addrs
+    - every router would need a lot of information to know how to direct pkts toward host
+- ip prefixes
+  - divided into network & host portions
+  - network with netmask /24 has 2^8 addrs
+- scalability improved
+  - number related hosts from common subnet
+- easy to add new hosts
+  - no need to update routers
+    - adding new host doesn't require adding a new forwarding entry
+- route aggregation
+  - hierarchical addressing allows efficient advertisement of routing information
+- more specific routes
+  - different isps can advertise more specific routes
+
+### subnets
+
+- device interfaces that can physically reach each other without passing through an intervening router
+- ip addrs have structure
+  - subnet part: devices in same subnet have common high order bits
+  - host part: remaining low order bits
+- detach each interface from its host or router, creating islands of isolated networks
+
+### how to get ip addr
+
+- how does a host get an ip?
+  - hard coded by sysadmin in config file (e.g. `/etc/rc.config` in unix)
+  - dhcp: dynamically get addr from server (plug & play)
+- how does a network get a subnet?
+  - gets allocated portion of its provider isp's addr space
+
+### ip addressing: cidr (classless interdomain routing)
+
+- subnet portion of addr of arbitrary length
+- addr format: a.b.c.d/x, where x is num bits in subnet portion of addr
+
+### dhcp
+
+- goal: host dynamically obtains ip from network server when it joins network
+  - can renew lease on addr in use
+  - allows reuse of addrs (only hold addr while connected/on)
+  - support for mobile users who join/leave network
+- overview
+  - host broadcasts dhcp discover msg (optional)
+  - dhcp server responds with dhcp offer msg (optional)
+  - host requests ip addr: dhcp request
+  - dhcp server sends addr: dhcp ack
+- can also return
+  - addr of first hop router for client
+  - name & ip of dns
+  - network mask (indicating network vs host portion of addr)
+
+### nat (network addr translation)
+
+- all devices in a lan share just one ipv4 addr as far as outside world is concerned
+- all datagrams leaving lan have same source nat ip, but different source ports
+- datagrams with source or dest in lan have private ip addr for source & destination
+- all devices in lan have 32-bit addrs in a private ip addr space (10/8, 172.16/12, 192.168/16) that can only be used in local network
+- advantages
+  - just one ip addr needed from provider isp for all devices
+  - can change addrs of host in local network without notifying outside world
+  - can change isp without changing lan device addrs
+  - security: devices inside local net not directly addressable or visible to outside world
+- implementation: nat router must (transparently)
+  - outgoing datagrams: replace (source ip, port) of every outgoing datagram to (nat ip, new port)
+    - remote clients/servers will respond using (nat ip, new port) as dest addr
+  - remember (in translation table) every ((source ip, port), (nat ip, new port)) pair
+  - incoming datagrams: replace (nat ip, new port) in dest fields of every incoming datagram with corresponding (source ip, port) in nat table
+- controversy
+  - routers should only process up to layer 3
+  - addr shortage should be solved by ipv6
+  - violates e2e argument (port manipulation by network layer device)
+  - nat traversal: what if client wants to connect to server behind nat?
+- nat extensively used in home & institutional nets, 4g/5g cell nets
+
+### ipv6 motivation
+
+- initial motivation: 32 bit ipv4 addr space would be completely allocated
+- additional motivation
+  - speed processing/forwarding: 40 byte fixed length header
+  - enable different network layer treatment of flows
+
+### ipv6 datagram format
+
+- compared with ipv4
+  - no checksum (speed processing at routers)
+  - no fragmentation/reassembly
+  - no options (available at upper layer)
