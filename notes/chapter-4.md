@@ -396,4 +396,121 @@
 - compared with ipv4
   - no checksum (speed processing at routers)
   - no fragmentation/reassembly
-  - no options (available at upper layer)
+  - no options (available at upper layer, next header protocol at router)
+
+### transition from ipv4 to ipv6
+
+- not all routers can be upgraded simultaneously
+  - no flag days
+  - how will network operate with mixed ipv4 & ipv6 routers?
+- tunneling: ipv6 datagram carried as payload in ipv4 datagram among ipv4 routers (pkt within pkt)
+  - tunneling used extensively in other contexts (4g/5g)
+
+### tunneling & encapsulation
+
+- generally done by wrapping ipv6 pkts with ipv4, since some devices support ipv6, but every device supports ipv4
+
+### ipv6 adoption
+
+- google: ~40% of clients access services via ipv6
+- nist: 1/3 of all us govt domains are ipv6 capable
+- long time for deployment & use
+  - been in progress for 25 years so far
+  - app level changes in the last 25 years: www, social media, streaming, etc.
+
+## generalized forwarding
+
+### match + action
+
+- each router contains forwarding table (flow table)
+  - match + action abstraction: match bit in arriving pkt & take action
+    - destination based forwarding: forward based on dest ip
+    - generalized forwarding
+      - many header fields can determine action
+      - many actions possible: drop/copy/modify/log pkt
+
+### flow table abstraction
+
+- flow: defined by header field values (in link, network, transport layer fields)
+- generalized forwarding: simple pkt handling rules
+  - match: pattern values in pkt header fields
+  - actions: for matched pkt: drop, fwd, modify, matched pkt or send matched pkt to controller
+  - priority: disambiguate overlapping patterns
+  - counters: num bytes & num pkts
+
+### openflow abstraction
+
+- match + action: abstraction unifies different kinds of devices
+  - router
+    - match: longest dest ip prefix
+    - action: fwd out link
+  - switch
+    - match: dest mac addr
+    - action: fwd or flood
+  - firewall
+    - match: ip addr & tcp/udp ports
+    - action: permit or deny
+  - nat
+    - match: ip addr & port
+    - action: rewrite addr & port
+- orchestrated tables can create network wide behavior
+
+### generalized forwarding: summary
+
+- match + action abstraction: match bits in arriving pkt headers in any layers & take action
+  - matching over many fields (link, network, transport layer)
+  - local actions: drop, fwd, mod, send matched pkt to controller
+  - program network wide behaviors
+- simple form of network programmability
+  - programmable, per packet processing
+  - historical roots: active networking
+  - today: more generalized programming (https://p4.org)
+
+### middleboxes
+
+- any intermediary box performing functions apart from normal, standard functions of an ip router on the data path between src & dest
+- examples
+  - nat
+    - home, cellular, institutional
+  - app specific
+    - service providers, institutional, cdn
+  - firewalls, ids
+    - corporate, institutional, service providers, isps
+  - load balancers
+    - corporate, service provider, data center, mobile nets
+  - caches
+    - service provider, mobile, cdn
+- initially were proprietary (closed) hardware solutions
+- move towards "whitebox" hardware implementing open api
+  - move away from proprietary hardware solutions
+  - programmable local actions via match + action
+  - move towards innovation/differentiation in software
+- sdn: (logically) centralized control & config mgmt often in private/public cloud
+- network functions virtualization (nfv): programmable services over white box networking, computation, & storage
+
+## internet architecture
+
+### ip hourglass
+
+- internet's thin waist
+  - one network layer protocol: ip
+  - must be implemented by every internet connected device
+  - many protocols in physical, link, transport, & app layers
+- middle age: include nfv, nat, caching, & firewalls
+  - middleboxes, operating inside network
+
+### 3 architectural principles of the internet
+
+- simple connectivity
+- ip protocol
+- intelligence & complexity at network edge
+
+### e2e argument
+
+- some network functionality (e.g. reliable data transfer & congestion) can be implemented in network or at network edge
+
+### where's the intelligence?
+
+- 20th c. phone net: intelligence & computing at network switches
+- internet (pre 2005): intelligence & computing at edge
+- internet (post 2005): programmable network devices, intelligence, computing, & massive app level infrastructure at edge
