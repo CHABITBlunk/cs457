@@ -217,7 +217,7 @@
 ### bgp msgs
 
 - bgp msgs exchanged between peers over tcp conn
-- messages
+- msgs
   - open: opens tcp conn to remote bgp peer & authenticates sending bgp peer
   - update: advertises new path (or withdraws old)
   - keepalive: keeps conn alive in absence of updates, also acks open request
@@ -243,3 +243,178 @@
 - multiple paths
   - gateway router may learn about multiple paths to dst
   - as1 gateway router 1c learns path as2,as3,x from 2a
+  - as1 gateway router learns path as3,x from 3a
+  - based on policy, as1 gateway router 1c chooses path as3,x & advertises path within as1 via ibgp
+
+### bgp populate forwarding tables
+
+- recall: 1a, 1b, 1d learn via ibgp from 1c: "path to x goes through 1c"
+- at 1d: ospf intra-domain routing: to get to 1c, use interface 1
+- at 1d: to get to x, use interface 1
+- at 1a: ospf intra-domain routing: to get to 1c, use interface 2
+- at 1a: to get to x, use interface 2
+
+### hot potato routing
+
+- 2d learns via ibgp it can route to x via 2a or 2c
+- hot potato routing: choose local gateway that has least intra-domain cost (e.g. 2d chooses 2a even though more as hops to x) - don't worry about inter-domain cost
+
+### bgp: achieving policy via advertisements
+
+- isp only wants to route traffic to/from its customer networks (doesn't want to carry transit traffic between other isps)
+  - a, b, c are provider networks
+  - x, w, y are customers
+  - x is dual-homed: attached to 2 other networks
+  - policy to enforce: x doesn't want to route from b to c via x, so x will not advertise to b a route to c
+  - a advertises path aw to b & c
+  - b chooses not to advertise baw to c
+    - b gets no revenue for routing cbaw since none of c, a, or w are b's customers
+    - c doesn't learn about cbaw path
+  - c will route caw (not using b) to get to w
+
+### bgp route selection
+
+- router may learn about more than one route to dst as, selects route based on
+  1. local preference value attr: policy decision
+  2. shortest as path
+  3. closest next hop router: hot potato routing
+  4. additional criteria
+
+### why different intra-as & inter-as routing?
+
+- policy
+  - inter-as: admin wants control over how its traffic is routed, who routes through its network
+  - intra-as: single admin, so policy less of an issue
+- scale
+  - hierarchical routing saves table size, reduced update traffic
+- performance
+  - intra-as: can focus on performance
+  - inter-as: policy dominates over performance
+
+## sdn control plane
+
+### sdn
+
+- internet network layer: historically implemented via distributed, per-router control approach
+  - monolithic router contains switching hardware, runs proprietary implementation of internet standard protocols (ip, rip, is-is, ospf, bgp) in proprietary router os
+  - different middleboxes for different layer functions: firewalls, load balancers, nat boxes, etc.
+- ~2005: renewed interest in rethinking network control plane
+
+### per-router control plane
+
+- individual routing algorithm components in each router interact in the control plane to compute forwarding tables
+
+### sdn control plane
+
+- remote controller computes & installs forwarding tables in routers
+
+### sdn
+
+- why a logically centralized control plane?
+  - easier network mgmt: avoid router misconfigurations, greater flexibility of traffic flows
+  - table based forwarding (openflow api) allows programming routers
+    - centralized programming easier: compute tables centrally & distribute
+    - distributed programming more difficult: compute tables as result of distributed algorithm implemented in each router
+  - open implementation of control plane
+    - foster innovation: let 1000 flowers bloom
+
+### sdn analogy: mainframe to pc
+
+- mainframe
+  - vertically integrated
+  - closed, proprietary
+  - slow innovation
+  - small industry
+- pc
+  - horizontal
+  - open interfaces
+  - rapid innovation
+  - huge industry
+
+### traffic engineering: difficult with traditional routing
+
+- what if network operator wants u to z traffic to flow along uvwz rather than uxyz?
+  - need to redefine link weights so traffic routing algorithm computes routes accordingly (or need a new algorithm)
+  - link weights only considered knobs: not much control
+- what if network operator wants to split u to z traffic along uvwz & uxyz (load balancing)?
+  - can't do it (or need new routing algorithm)
+- what if w wants to route blue & red traffic differently from w to z?
+  - can't do it with dst-based forwarding & ls or dv routing
+  - generalized forwarding & sdn can achieve any desired routing
+
+### sdn
+
+1. generalized "flow-based" forwarding
+2. control & data plane separation
+3. control plane functions external to data plane switches
+4. programmable control apps
+
+- data plane switches
+  - fast, simple, commodity switches implementing generalized data plane forwarding in hardware
+  - flow (forwarding) table computed & installed under controller supervision
+  - api for table-based switch control (e.g. openflow)
+    - defines what is controllable & what is not
+  - protocol for communicating with controller (e.g. openflow)
+- sdn controller (network os)
+  - maintain network state info
+  - interacts with network control apps above via northbound api
+  - interacts with network switches below via southbound api
+  - implemented as distributed system for performance, scalability, fault tolerance, robustness
+- network control apps
+  - brains of control: implement control functions using lower level services, api provided by sdn controller
+  - unbundled: can be provided by 3rd party: distinct from routing vendor or sdn controller
+
+### sdn controller components
+
+- interface layer to network control apps: abstractions api
+- network wide state mgmt: state of network links, switches, & services: distributed database
+- communication: communicate between sdn controller & controlled switches
+
+### openflow: key msgs from controller to switch
+
+- features: controller queries switch features, switch replies
+- configure: controller queries/sets switch config params
+- modify-state: add, delete, modify flow entries in openflow tables
+- pkt-out: controller can send this pkt out of specific switch port
+
+### openflow: key msgs from switch to controller
+
+- pkt-in: transfer pkt & its control to controller. see pkt-out msg from controller
+- flow-removed: flow table entry deleted at switch
+- port status: inform controller of a change on a port
+
+### sdn control/data plane interaction example
+
+1. s1, experiencing link failure, uses openflow port status msg to notify controller
+2. sdn controller receives openflow msg, updates link status info
+3. dijkstra's routing algorithm application called
+4. dijkstra's routing algorithm access network graph info & link state info in controller, then computes new routes
+5. link state routing app interacts with flow table computation component in sdn controller, which computes new flow tables needed
+6. controller uses openflow to install new tables in switches that need updating
+
+### onos sdn controller
+
+- control apps separate from controller
+- intent framework: high level spec of service: what rather than how
+- considerable emphasis on distributed core: service reliability, replication performance scaling
+
+### google orion sdn control plane
+
+- orion: google's sdn control plane: control plane for google's data center (jupiter) & wide area (b4) networks
+  - routing (intradomain, ibgp), traffic engineering: implemented in apps on top of orion core
+  - edge-edge flow-based controls (e.g. coflow scheduling) to meet contract slas
+  - mgmt: pub-sub distributed microservices in orion core, openflow for switch signaling/monitoring
+
+### google & sdn: value of logically centralized abstraction
+
+- new opportunities to more formally & intentionally manage config
+
+### sdn: selected challenges
+
+- hardening control plane: dependable, reliable, performance scalable, secure distributed system
+  - robustness to failures: leverage strong theory of reliable distributed system for control plane
+  - dependability, security: baked in from day 1?
+- networks & protocols meeting mission specific requirements
+  - e.g. real-time, ultra-reliable, ultra-secure
+- internet scaling: beyond a single as
+- sdn critical in 5g networks
