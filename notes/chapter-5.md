@@ -418,3 +418,135 @@
   - e.g. real-time, ultra-reliable, ultra-secure
 - internet scaling: beyond a single as
 - sdn critical in 5g networks
+
+### sdn & future of traditional network protocols
+
+- sdn computed vs router-computer forwarding tables
+  - just one example of logically centralized computed vs protocol computed
+- imagine sdn computed congestion control
+  - controller sets sender rates based on congestion levels reported by router
+- how will implementation of network functionality (sdn vs protocols) evolve?
+
+## icmp
+
+### icmp
+
+- used by hosts & routers to communicate network level info
+  - error reporting: unreachable host, network, port, protocol
+  - echo request/reply (used by ping)
+- network layer "above" ip
+  - icmp msg carried in ip datagrams
+- icmp msg: type, code + first 8 bytes of ip datagram causing error
+
+### traceroute & icmp
+
+- src sends sets of udp segments to dst
+  - 1st set has ttl = 1, 2nd set has ttl = 2, etc
+- datagram in nth set arrives to nth router
+  - router discards datagram & sends src icmp msg (type 11, code 0)
+  - icmp msg possibly includes name of router & ip
+- when icmp msg arrives at src: record rtts
+
+## network mgmt & config
+
+### components of network mgmt
+
+- managing server
+  - app, typically with network managers (humans) in loop
+- managed device
+  - equipment with manageable, configurable hardware, software components
+- data
+  - device state config data, operational data, device stats
+- network mgmt protocol
+  - used by managing server to query, configure, manage device; used by devices to inform managing server of data & events
+
+### network operator approaches to mgmt
+
+- cli
+- snmp/mib
+  - operator queries/sets devices data (mib) via simple network mgmt protocol (snmp)
+- netconf/yang
+  - more abstract, network-wide, holistic
+  - emphasis on multi-device config mgmt
+  - yang: data modeling language
+  - netconf: communicate yang-compatible actions/data to/from/among remote devices
+
+### snmp
+
+- 2 ways to convey mib info & commands
+  - request/response mode
+    - manager sends request to managed device, managed device sends response back
+  - trap mode
+    - managed device sends trap msg to manager (only during exceptional events)
+- msg types
+  - `GetRequest`, `GetNextRequest`, `GetBulkRequest`
+    - manager to agent: get me data (data instance, next data in list, block of data)
+  - `SetRequest`
+    - manager to agent: set mib value
+  - `Response`
+    - agent to manager: value, respnes
+  - `Trap`
+    - agent to manager: inform manager of exceptional event
+- msg formats
+  - msg types 0-3
+    - get/set header, then variables to get/set
+  - msg type 4
+    - snmp pdu with trap header & trap info
+- mib (mgmt info base)
+  - managed device's operational (& some config) data
+  - gathered into device mib module
+    - 400 mib modules defined in rfc's, many more vendor specific mibs
+  - structure of mgmt info (smi): data definition language
+
+### netconf
+
+- overview
+  - goal: actively manage/configure devices network-wide
+  - operates between managing server & managed network devices
+    - actions: retrieve, set, modify, activate configs
+    - atomic commit actions over multiple devices
+    - query operational data & stats
+    - subscribe to notifications from devices
+  - remote procedural call (rpc) paradigm
+    - netconf protocol msgs encoded in xml
+    - exchanged over secure, reliable transport protocol (e.g. tls)
+- typical exchange similar to tcp
+- operations
+  - `<get-config>`
+    - retrieve all or part of given config. devices can have multiple configs
+  - `<get>`
+    - retrieve all or part of both config state & operational state data
+  - `<edit-config>`
+    - change specified (possibly running) config at managed device. managed device `<rpc-reply>` contains ok or `<rpcerror>` with rollback
+  - `<lock>`/`<unlock>`
+    - lock or unlock config datastore at managed device (to lock out netconf, snmp, or clis commands from other sources)
+  - `<create-subscription>`/`<notification>`
+    - enable event notif subscription from managed device
+- sample netconf rpc msg
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc message-id="101" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <edit-config>
+    <target>
+      <running />
+    </target>
+    <config>
+      <top xmlns="http://example.com/schema/1.2/config">
+        <interface>
+          <name>Ethernet/0/0</name>
+          <mtu>1500</mtu>
+        </interface>
+      </top>
+    </config>
+  </edit-config>
+</rpc>
+```
+
+### yang
+
+- data modeling language used to specify structure, syntax, & semantics of netconf network mgmt data
+  - built-in data types, like smi
+- xml document describing device & capabilities can be generated from yang description
+- can express constraints among data that must be satisfied by a valid netconf config
+  - ensure netconf configs satisfy correctness & consistency constraints
