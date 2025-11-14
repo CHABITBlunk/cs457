@@ -226,4 +226,166 @@
 - csma/cd: csma with collision detection
   - collisions detected within short time
   - colliding transmissions aborted, reducing channel wastage
-  - collision detection easy in wired, difficult with wireless
+  - collision detection easy with wired, difficult with wireless
+
+### csma collisions
+
+- collisions can still occur with carrier sensing
+  - propagation delay means 2 nodes may not hear each other's transmission that just started
+- collision: entire pkt transmission time wasted
+  - distance & propagation delay play role in determining collision probability
+
+### csma/cd
+
+- reduces amount of time wasted in collisions
+  - transmission aborted on collision detection
+- efficiency
+  - tprop: max prop delay between 2 lan nodes
+  - ttrans: time to transmit max size frame
+  - goes to 1 as tprop goes to 0 and as ttrans goes to infinity
+  - better than aloha, and simple, clean, cheap, and decentralized
+
+### ethernet csma/cd algorithm
+
+- ethernet receives datagram from network layer, creates frame
+- if ethernet senses channel
+  - if idle, start transmitting
+  - if busy, wait until idle
+- if entire frame transmitted without collision, done
+- after aborting, enter binary (exponential) backoff
+  - after mth collision, chooses k at random from {0, 1, 2, ..., 2^n - 1}
+  - ethernet waits k \* 512 bit times, returns to step 2
+  - more collisions -> longer backoff interval
+
+### taking turns protocols
+
+- channel partitioning protocols
+  - share channel efficiently & fairly at high load
+  - inefficient at low load: delay in channel access, 1/n bandwidth allocated even if only 1 active node
+- random access protocols
+  - efficient at low load: single node can fully utilize channel
+  - high load: collision overhead
+- taking turns protocols
+  - look for both of best worlds
+
+### taking turns multiple access channel protocols
+
+- token passing
+  - control token msg explicitly passed from one node to next sequentially
+    - transmit while holding token
+  - concerns
+    - token overhead
+    - latency
+    - token is single point of failure
+
+### cable access network: fdm, tdm, & random access
+
+- multiple downstream (broadcast) fdm channels: up to 1.6 Gbps/channel
+  - single cmts transmits into channels
+- multiple upstream channels (up to 1 Gbps/channel)
+  - multiple access: all users contend (random access) for certain upstream channel time slots; others assigned tdm
+
+### cable access network
+
+- docsis (data over cable service interface spec)
+  - fdm over upstream, downstream frequency channels
+  - tdm upstream: some slots assigned, some have contention
+    - downstream map frame: assigns upstream risks
+    - request for upstream slots (& data) transmitted random access (binary backoff) in selected slots
+
+### summary of mac protocols
+
+- channel partitioning by time, frequency, or code
+  - time division, frequency division
+- random access (dynamic)
+  - aloha, s-aloha, csma, csma/cd
+  - carrier sensing: easy in some media (wire), hard in others (wireless)
+  - csma/cd used in ethernet
+  - csma/ca used in 802.11
+- taking turns
+  - polling from central site, token passing
+  - bluetooth, fddi, token ring
+
+## lans
+
+## addressing & arp
+
+### mac addrs
+
+- 32 bit ip addr
+  - network layer addr for interface
+  - used for layer 3 forwarding
+- mac (or lan or physical or ethernet) addr
+  - function: used locally to get frame from one interface to another interface in same subnet
+  - 48 bit mac addr (for most lans) burned in nic rom, also sometimes software settable
+- mac addr allocation administered by ieee
+- manufacturer buys portion of mac addr space to assure uniqueness
+- analogy
+  - mac addr: like social security number
+  - ip addr: like postal addr
+- mac flat addr: portability
+  - can move interface from one lan to another
+  - recall ip addr not portable: depends on ip subnet to which node it is attached
+
+### arp (addr resolution protocol)
+
+- arp table: each ip node (host, router) on lan has table
+  - ip/mac addr mappings for some lan nodes
+    - <ip addr, mac addr, ttl>
+  - ttl (time to live): time after which addr mapping will be forgotten (typically 20 min)
+
+### arp in action
+
+- example: a wants to send datagram to b
+- a broadcasts arp query, containing b's ip addr
+  - all nodes on lan receive arp query
+- when b receives a's arp msg, adds a to its arp table, sends frame back to a
+
+### routing through another subnet: addressing
+
+- scenario: a and b on different subnets but both connected to r
+- walkthrough sending a datagram from a to b via r
+  - focus on addressing - at ip (datagram) & mac (frame) layer levels
+  - assume that
+    - a knows b's ip
+    - a knows ip addr of first hop router
+    - a knows r's mac addr
+  - a creates ip datagram with ip (src a, dst b)
+  - a creates link layer frame containing ip datagram from a to b
+    - r's mac addr is frame's dst
+  - frame sent from a to r
+  - frame received at r, datagram removed, passed up to ip
+  - r determines outgoing interface, passes datagram with ip src a, dst b to link layer
+  - r creates link layer frame containing datagram from a to b. frame dst addr: b's mac addr
+  - r determines outgoing interface, passes datagram with ip src a, dst b to link layer
+  - r creates link layer frame containing a to b ip datagram. frame dst addr: b's mac addr
+  - transmits link layer frame
+
+## ethernet
+
+### ethernet
+
+- dominant wired lan medium
+  - first widely used lan tech
+  - simple, cheap
+  - kept up with speed race: 10 Mbps-400 Gbps
+  - single chip, multiple speeds
+- physical topology
+  - bus: popular through mid 90s
+    - all nodes in same collision domain (can collide with each other)
+  - switched: prevails today
+    - active link layer 2 switch in center
+    - each spoke runs a separate ethernet protocol (nodes do not collide with each other)
+- frame structure
+  - sending interface encapsulates ip datagram (or other network layer protocol pkt) in ethernet frame
+  - preamble
+    - used to synchronize receiver & sender clock rates
+    - 7 bytes of 10101010 followed by one byte of 10101011
+  - addrs: 6 byte src & dst mac addrs
+    - if adapter receives frame with matching dst addr or with broadcast addr (e.g. arp pkt), passes data in frame to network layer protocol
+      - otherwise, discard frame
+  - type: indicates higher layer protocol
+    - mostly ip but others possible, e.g. novell ipx, appletalk
+    - used to demux at receiver
+  - crc at receiver
+    - error detected: frame dropped
