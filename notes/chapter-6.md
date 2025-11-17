@@ -389,3 +389,187 @@
     - used to demux at receiver
   - crc at receiver
     - error detected: frame dropped
+
+### ethernet: unreliable, connectionless
+
+- connectionless: no handshaking between sender & receiver
+- unreliable: receiver doesn't send ack or nak to sender
+  - data in dropped frames recovered only if initial sender uses higher layer rdt (e.g. tcp), otherwise dropped data lost
+- ethernet's multiple access protocol: unslotted csma/cd with binary backoff
+
+### 802.3 ethernet standards: link & physical layers
+
+- many different ethernet standards
+  - common multiple access protocol & frame format
+  - different speeds: 2 Mbps, ..., 100 Mpbs, 1 Gbps, 10 Gbps, 40 Gbps, 80 Gbps
+    - different physical media: fiber, cable
+
+## switches
+
+### switches
+
+- link layer device taking an active role
+  - store & forward ethernet (or other type of) frames
+  - examine incoming frame's mac addr, selectively forward frame to >= 1 outgoing links when frame is to be forwarded on segment, uses csma/cd to access segment
+- transparent: hosts unaware of presence of switches
+- plug & play, self learning
+  - switches do not need to be configured
+
+### multiple simultaneous transmissions
+
+- hosts have dedicated & direct connection to switch
+- switches buffer pkts
+- ethernet protocol used on each incoming link
+  - no collisions, full duplex
+  - each link is its own collision domain
+- switching: a to a' and b to b' can transmit simultaneously without collisions
+  - but a to a' and c to a' cannot happen simultaneously
+
+### switch forwarding table
+
+- how does a switch know a' reachable via interface 4 and b' reachable via interface 5?
+  - each switch has a switch table
+    - each entry: (host mac addr, interface to reach host, time stamp)
+    - looks like a routing table
+- how are entries created & maintained in switch table?
+  - something like a routing protocol
+
+### self learning
+
+- switch learns which hosts can be reached through which interfaces
+  - when frame received, switch learns location of sender: incoming lan segment
+  - records (sender, location) in table
+
+### frame filtering & forwarding
+
+- when frame received at switch
+  1. record incoming link & mac addr of sending host
+  2. index switch table using dst mac addr
+  3. if entry found for dst
+  - if dst on segment from which frame arrived, then drop frame, else forward frame on interface indicated by entry
+  - else flood
+
+### interconnecting switches
+
+- self learning switches can be connected together
+- sending from a to g - how does s1 know to forward frame dst to g via s4 and s3?
+  - self learning (flood, then find switch from where response came)
+
+### umass campus network - detail
+
+- 4 firewalls
+- 10 routers
+- 2000+ network switches
+- 6000 wireless access points
+- 3000 active wired network jacks
+- 55000 active end user wireless devices
+  - all built, operated, maintained by ~15 people
+
+### switches vs routers
+
+- both are store & forward
+  - routers: network layer devices (examine network layer headers)
+  - switches: link layer devices (examine link layer headers)
+- both have forwarding tables
+  - routers: compute tables using routing algorithms & ip addrs
+  - switches: learn forwarding table using flooding, learning, & mac addrs
+
+## vlans
+
+### vlan motivation
+
+- what happens as lan sizes scale & users change point of attachment?
+  - single broadcast domain
+    - scaling: all layer 2 broadcast traffic (arp, dhcp, unknown mac) must cross entire lan
+    - efficiency, security, privacy issues
+  - administrative issues
+    - cs user moves office to ee - physically attached to ee switch, but wants to remain logically attached to cs switch
+
+### port based vlans
+
+- vlan
+  - switch(es) supporting vlan capabilities can be configured to define multiple virtual lans over single physical lan infrastructure
+- port based vlan
+  - switch ports grouped (by switch mgmt software) so that single physical switch operates as multiple virtual switches
+- traffic isolation - frames to/from ports 1-8 can only reach ports 1-8
+  - can also define vlan based on mac addrs of endpoints, rather than switch port
+- dynamic membership: ports can be dynamically assigned among vlans
+- forwarding between vlans: done via routing (just as with separate switches)
+  - in practice, vendors sell combined switches + routers
+
+### vlans spanning multiple switches
+
+- trunk port: carries frames between vlans defined over multiple physical switches
+  - frames forwarded within vlan between switches can't be vanilla 802.1 frames (must carry vlan id info)
+  - 802.1q protocol adds/removes additional header fields for frames forwarded between trunk ports
+
+### 802.1q vlan frame format
+
+- after src addr but before type:
+  - 2 byte tag protocol identifier (value 81-00)
+  - tag control information (12 bit vlan id field, 3 bit priority field like ip tos)
+- recompute crc
+
+### evpn: ethernet vpns (aka vxlans)
+
+- layer 2 ethernet switches logically connected to each other (e.g. using ip as an underlay)
+  - ethernet frames carried within ip datagrams between sites
+  - tunneling scheme to overlay layer 2 networks on top of layer 3 networks runs over existing networking infrastructure & provides a means to stretch a layer 2 network
+
+## link virtualization: mpls
+
+### multiprotocol label switching (mpls)
+
+- goal: high speed ip forwarding among network of mpls capable routers, using fixed length label instead of shortest prefix matching
+  - faster lookup using fixed length id
+  - borrowing ideas from virtual circuit approach
+  - ip datagram still keeps ip addr
+
+### mpls capable routers
+
+- aka label switched router
+- forward pkts to outgoing interface based only on label value (don't inspect ip addr)
+  - mpls forwarding table distinct from ip forwarding tables
+- flexibility: mpls forwarding decisions can differ from those of ip
+  - use dst & src addrs to route flows to same dst differently (traffic engineering)
+  - reroute flows quickly if link fails: precomputed backup paths
+
+### mpls vs ip paths
+
+- ip routing: path to dst determined by dst addr alone
+- mpls routing: path to dst can be based on src & dst addr
+  - flavor of generalized forwarding
+  - fast reroute: precompute backup routes in case of link failure
+
+### mpls signaling
+
+- modify ospf & is-is link state flooding protocols to carry info used by mpls routing
+  - e.g. link bandwidth, amount of reserved link bandwidth
+- entry mpls router uses rsvp-te signaling protocol to set up mpls forwarding at downstream routers
+
+## data center networking
+
+### datacenter networks
+
+- 10s to 100s of thousands of hosts, often closely coupled, in close proximity
+  - ebusiness
+  - content servers
+  - search engines, data mining
+- challenges
+  - multiple apps, each serving massive numbers of clients
+  - reliability
+  - managing/balancing load, avoiding processing, networking, & data bottlenecks
+
+### datacenter network elements
+
+- border routers
+  - connections outside datacenter
+- tier 1 (core) switches
+  - connecting to ~16 t2s below
+- tier 2 (aggregation switches)
+  - connecting to ~16 tors below
+- top of rack (tor) (access) switches
+  - one per rack, 100G-400G ethernet to blades
+- server racks
+  - 20-40 server blades: hosts
+- 2 layer leaf/spline datacenter interconnection network
