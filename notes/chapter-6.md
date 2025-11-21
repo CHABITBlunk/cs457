@@ -572,4 +572,69 @@
   - one per rack, 100G-400G ethernet to blades
 - server racks
   - 20-40 server blades: hosts
-- 2 layer leaf/spline datacenter interconnection network
+
+### datacenter networks: multipath
+
+- rich interconnection among switches & racks
+  - increased throughput between racks (multiple routing paths possible)
+  - increased reliability via redundancy
+
+### datacenter networks: app layer routing
+
+- load balancer: app layer routing
+  - receives external client requests
+  - directs workload within datacenter
+  - returns results to external client, hiding datacenter internals from client
+
+### datacenter networks: protocol innovations
+
+- link layer
+  - roce: remote dma (rdma) over converged ethernet
+- transport layer
+  - ecn (explicit congestion notification) used in transport layer congestion protocol (dctcp, tdqcn)
+  - experimentation with hop by hop (backpressure) congestion control
+- routing, mgmt
+  - sdn widely used within/among orgs' datacenters
+  - place related services, data as close as possible (e.g. in same rack or nearby rack) to minimize tier 2 & tier 1 comms
+
+### orion: google's new sdn control plane for internal datacenter (jupiter) & wan (b4)
+
+- routing (intradomain, ibgp), traffic engineering: implemented in apps on top of orion core
+- edge-edge flow based controls (e.g. coflow scheduling) to meet contract slas
+- mgmt: pub-sub distributed microservices in orion core, openflow for switch signaling/monitoring
+- no routing protocols, congestion control partially also managed by sdn rather than by protocol
+- potential harbinger of death of protocols
+
+## day in the life of a web request
+
+### scenario
+
+- arriving mobile client attaches to network & requests web page
+- connection phase
+  - connecting laptop needs to get its own ip addr, addr of first hop router, & addr of dns server: use dhcp
+  - dhcp request encapsulated in udp, encapsulated in ip, encapsulated in 802.3 ethernet
+  - ethernet frame broadcast on lan, received at router running dhcp server
+  - ethernet demuxed to ip demuxed, udp demuxed to dhcp
+  - dhcp server formulates dhcp ack containing client's ip addr, ip addr of first hop router for client, name & ip of dns server
+  - encapsulation at dhcp server, frame forwarded (switch learning) through lan, demuxing at client
+  - dhcp client receives dhcp ack
+- arp (before dns, before http)
+  - before sending http request, need ip addr of google.com: dns
+  - dns query created, encapsulated in udp, encapsulated in ip, encapsulated in ethernet. to send frame to router, need mac addr of router interface: arp
+  - arp query broadcast, received by router, which replies with arp reply giving mac addr of router interface
+  - client now knows mac addr of first hop router, so now can send frame containing dns query
+- using dns
+  - ip datagram containing dns query forwarded via lan switch from client to first hop router
+  - ip datagram forwarded from campus network into isp network, routed (tables created by rip, ospf, is-is, and/or bgp) to dns server
+  - demuxed to dns
+  - dns replies to client with ip addr of google.com
+- tcp connection carrying http
+  - to send http request, client first opens tcp socket to web server
+  - tcp syn segment interdomain routed to web
+  - server responds with synack
+  - client sends ack -> connection established
+- http request/reply
+  - http request sent into tcp socket
+  - ip datagram containing http request routed to google
+  - web server responds to with http reply containing web page
+  - ip datagram containing http reply routed back to client
