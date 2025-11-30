@@ -1,0 +1,17 @@
+starting connection to ('127.0.0.1', 65432)
+sending b'\x00\x7f{"byteorder": "little", "content-type": "binary/custom-client-binary-type", "content-encoding": "binary", "content-length": 10}negate\x00t\xcb\xb1' to ('127.0.0.1', 65432)
+result: -7654321
+closing connection to ('127.0.0.1', 65432)
+starting connection to ('127.0.0.1', 65432)
+sending b'\x00\x7f{"byteorder": "little", "content-type": "binary/custom-client-binary-type", "content-encoding": "binary", "content-length": 10}double\x00t\xcb\xb1' to ('127.0.0.1', 65432)
+result: 15308642
+closing connection to ('127.0.0.1', 65432)
+listening on ('127.0.0.1', 65432)
+accepted connection from ('127.0.0.1', 51716)
+received binary/custom-client-binary-type request from ('127.0.0.1', 51716)
+sending b'\x00\x7f{"byteorder": "little", "content-type": "binary/custom-server-binary-type", "content-encoding": "binary", "content-length": 10}result\xff\x8b4O' to ('127.0.0.1', 51716)
+closing connection to ('127.0.0.1', 51716)
+accepted connection from ('127.0.0.1', 53482)
+received binary/custom-client-binary-type request from ('127.0.0.1', 53482)
+sending b'\x00\x7f{"byteorder": "little", "content-type": "binary/custom-server-binary-type", "content-encoding": "binary", "content-length": 10}result\x00\xe9\x97b' to ('127.0.0.1', 53482)
+closing connection to ('127.0.0.1', 53482)
