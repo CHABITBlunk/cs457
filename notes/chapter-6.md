@@ -216,6 +216,7 @@
 - collision probability increases with no synchronization
   - frame sent at t0 collides with other frames send tin [t0 - 1, t0 + 1]
 - pure aloha efficiency: 18%
+  - max efficiency: find p\* that maximizes np(1 - p)^(2(n - 1))
 
 ### csma (carrier sense multiple access)
 
